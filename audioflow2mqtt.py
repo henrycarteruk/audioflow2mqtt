@@ -219,6 +219,7 @@ class AudioflowDevice:
                 device_info = await httpx_async.get(url=device_url + "switch", timeout=self.timeout)
             except Exception as e:
                 logging.error(f"Unable to get network info: {e}")
+                return  # skip this cycle; the next poll will retry
             device_info = json.loads(device_info.text)
             network_info = parse_wifi_info(device_info["wifi"])
 
