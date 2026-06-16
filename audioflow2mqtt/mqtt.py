@@ -62,6 +62,8 @@ class Mqtt:
                         await self.device.set_zone_state(cmd["serial_no"], cmd["switch_no"], payload)
                 elif cmd["command"] == "set_zone_enable":
                     await self.device.set_zone_enable(cmd["serial_no"], cmd["switch_no"], payload)
+                elif cmd["command"] == "reboot":
+                    await self.device.reboot_device(cmd["serial_no"])
         except aiomqtt.MqttError:
             self.connected = False
 

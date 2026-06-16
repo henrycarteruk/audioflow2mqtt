@@ -239,6 +239,17 @@ class AudioflowDevice:
             except Exception as e:
                 logging.error(f"Enable/disable zone for device at {ip} failed: {e}")
 
+    async def reboot_device(self, serial_no):
+        """Reboot the Audioflow device via the GET /reboot_now endpoint"""
+        device_url = self.devices[serial_no]["device_url"]
+        ip = self.devices[serial_no]["ip_addr"]
+        try:
+            async with httpx.AsyncClient() as httpx_async:
+                await httpx_async.get(url=device_url + "reboot_now", timeout=self.timeout)
+            logging.info(f"Reboot command sent to Audioflow device at {ip}.")
+        except Exception as e:
+            logging.error(f"Reboot command for device at {ip} failed: {e}")
+
     async def poll_device_state(self, serial_no, httpx_async):
         """Poll for Audioflow device information every 10 seconds in case button(s) is/are pressed on device"""
         while True:
@@ -333,6 +344,35 @@ class AudioflowDevice:
                         qos=1,
                         retain=True,
                     )
+
+                # HA button entity - reboot
+                await client.publish(
+                    f"{ha_button}{serial_no}/reboot/config",
+                    json.dumps(
+                        {
+                            "availability": [
+                                {"topic": f"{base_topic}/status"},
+                                {"topic": f"{base_topic}/{serial_no}/status"},
+                            ],
+                            "name": "Reboot",
+                            "default_entity_id": f"button.reboot_{serial_no}",
+                            "command_topic": f"{base_topic}/{serial_no}/reboot",
+                            "payload_press": "reboot",
+                            "unique_id": f"{serial_no}_reboot",
+                            "icon": "mdi:restart",
+                            "device": {
+                                "name": f"{name}",
+                                "identifiers": f"{serial_no}",
+                                "manufacturer": "Audioflow",
+                                "model": f"{model}",
+                                "sw_version": f"{fw_version}",
+                            },
+                            "platform": "mqtt",
+                        }
+                    ),
+                    qos=1,
+                    retain=True,
+                )
 
                 # HA sensor entities
                 network_info_names = {
