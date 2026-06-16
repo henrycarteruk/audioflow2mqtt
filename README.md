@@ -121,11 +121,17 @@ tediore/audioflow2mqtt:stable
 
 <br>
 
-**Bare metal (not recommended)**
-1. Set the necessary environment variables or create config.yaml
-2. `git clone https://github.com/Tediore/audioflow2mqtt`
+**Local (from source)**
+
+Running from source uses [uv](https://docs.astral.sh/uv/) for dependency management and a `Makefile` for common tasks. Install uv first (see the [uv install docs](https://docs.astral.sh/uv/getting-started/installation/)), then:
+
+1. Set the necessary environment variables or create `config.yaml`
+2. `git clone https://github.com/henrycarteruk/audioflow2mqtt`
 3. `cd audioflow2mqtt`
-4. `python3 audioflow2mqtt.py`
+4. `make install` — create the virtualenv and install the pinned dependencies
+5. `make run` — start the gateway
+
+Other targets: `make lint`, `make format`, `make test`, and `make docker` (build the image locally). Run `make` on its own to list them.
 
 <br>
 
