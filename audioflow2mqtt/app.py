@@ -14,6 +14,16 @@ from audioflow2mqtt.health import health_check_server
 from audioflow2mqtt.mqtt import Mqtt
 
 
+class HttpxGetFilter(logging.Filter):
+    """Drop the noisy per-request ``HTTP Request: GET ...`` lines httpx emits.
+
+    The frequent zone/network polls would otherwise flood the logs at INFO.
+    """
+
+    def filter(self, record):
+        return "HTTP Request: GET " not in record.getMessage()
+
+
 async def main():
     config = load_config()
 
@@ -24,6 +34,10 @@ async def main():
     )
     if log_level_invalid:
         logging.warning(f'Selected log level "{config.log_level}" is not valid; using default (info)')
+
+    # Quiet httpx's per-request GET logging unless the user actually wants DEBUG.
+    if config.log_level.upper() != "DEBUG":
+        logging.getLogger("httpx").addFilter(HttpxGetFilter())
 
     logging.info(f"=== audioflow2mqtt version {config.version} started ===")
 
