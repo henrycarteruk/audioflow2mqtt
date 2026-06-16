@@ -5,28 +5,27 @@ import json
 import logging
 import time
 
-import httpx
-
 from audioflow2mqtt.parsing import parse_wifi_info
 
 
 class AudioflowDevice:
-    def __init__(self, config, mqtt=None):
+    def __init__(self, config, mqtt=None, http=None):
         self.config = config
         self.mqtt = mqtt  # set by the caller after the Mqtt instance is created
+        self.http = http  # shared httpx.AsyncClient, set by the caller in main()
         self.timeout = 3
         self.states = ["off", "on"]
         self.set_all_zones = {"off": "0 0 0 0", "on": "1 1 1 1"}
         self.devices = {}
         self.serial_nos = []
 
-    async def get_device_info(self, device_url, ip, nwk_discovery, httpx_async):
+    async def get_device_info(self, device_url, ip, nwk_discovery):
         """Get info about Audioflow device(s)"""
         device = True
         zone_list = ["A", "B", "C", "D"]
         try:
             logging.debug(f"Attempting to connect to {ip}...")
-            device_info = await httpx_async.get(url=device_url + "switch", timeout=self.timeout)
+            device_info = await self.http.get(url=device_url + "switch", timeout=self.timeout)
             logging.debug(f"Connected to {ip}.")
         except Exception as e:
             logging.error(f"Unable to connect to {ip}: {e}")
@@ -46,10 +45,9 @@ class AudioflowDevice:
             self.devices[serial_no]["last_poll_success"] = time.monotonic()
             self.serial_nos.append(serial_no)
 
-            for item in device_info:
-                self.devices[serial_no][item] = device_info[item]
+            self.devices[serial_no].update(device_info)
 
-            zone_info = await httpx_async.get(url=device_url + "zones", timeout=self.timeout)
+            zone_info = await self.http.get(url=device_url + "zones", timeout=self.timeout)
             zone_info = json.loads(zone_info.text)
             self.devices[serial_no]["zone_info"] = zone_info
             zone_count = len(zone_info["zones"])
@@ -70,7 +68,7 @@ class AudioflowDevice:
 
             logging.debug(self.devices[serial_no])
 
-    async def get_network_info(self, serial_no, httpx_async):
+    async def get_network_info(self, serial_no):
         """
         Get SSID and device signal strength
         String parsing :(
@@ -79,7 +77,7 @@ class AudioflowDevice:
         retry_count = self.devices[serial_no]["retry_count"]
         if not retry_count:
             try:
-                device_info = await httpx_async.get(url=device_url + "switch", timeout=self.timeout)
+                device_info = await self.http.get(url=device_url + "switch", timeout=self.timeout)
             except Exception as e:
                 logging.error(f"Unable to get network info: {e}")
                 return  # skip this cycle; the next poll will retry
@@ -101,8 +99,7 @@ class AudioflowDevice:
         """Get info about one zone and publish to MQTT"""
         device_url = self.devices[serial_no]["device_url"]
         try:
-            async with httpx.AsyncClient() as httpx_async:
-                zones = await httpx_async.get(url=device_url + "zones", timeout=self.timeout)
+            zones = await self.http.get(url=device_url + "zones", timeout=self.timeout)
             self.devices[serial_no]["zones"] = json.loads(zones.text)
         except Exception as e:
             logging.error(f"Unable to get zone info: {e}")
@@ -123,13 +120,13 @@ class AudioflowDevice:
             except Exception as e:
                 logging.error(f"Unable to publish zone state: {e}")
 
-    async def get_all_zones(self, serial_no, httpx_async):
+    async def get_all_zones(self, serial_no):
         """Get info about all zones"""
         device_url = self.devices[serial_no]["device_url"]
         ip = self.devices[serial_no]["ip_addr"]
         retry_count = self.devices[serial_no]["retry_count"]
         try:
-            zones = await httpx_async.get(url=device_url + "zones", timeout=self.timeout)
+            zones = await self.http.get(url=device_url + "zones", timeout=self.timeout)
             self.devices[serial_no]["zones"] = json.loads(zones.text)
             await self.publish_all_zones(serial_no)
             if retry_count > 0:
@@ -193,10 +190,7 @@ class AudioflowDevice:
                         data = self.states.index(zone_state)
                     else:
                         data = 1 if current_state == "off" else 0
-                    async with httpx.AsyncClient() as httpx_async:
-                        await httpx_async.put(
-                            url=device_url + "zones/" + str(zone_no), data=str(data), timeout=self.timeout
-                        )
+                    await self.http.put(url=device_url + "zones/" + str(zone_no), data=str(data), timeout=self.timeout)
                     await self.get_one_zone(
                         serial_no, zone_no
                     )  # Device does not send new state after state change, so we get the new state and publish it to MQTT
@@ -212,11 +206,9 @@ class AudioflowDevice:
         if zone_state in self.states:
             try:
                 data = self.set_all_zones[zone_state]
-                async with httpx.AsyncClient() as httpx_async:
-                    await httpx_async.put(url=device_url + "zones", data=str(data), timeout=self.timeout)
-                    await self.get_all_zones(
-                        serial_no, httpx_async
-                    )  # Device does not send new state after state change, so we get the new state and publish it to MQTT
+                await self.http.put(url=device_url + "zones", data=str(data), timeout=self.timeout)
+                # Device does not send new state after state change, so we get the new state and publish it to MQTT
+                await self.get_all_zones(serial_no)
             except Exception as e:
                 logging.error(f"Set all zone states for device at {ip} failed: {e}")
         elif zone_state == "toggle":
@@ -232,12 +224,11 @@ class AudioflowDevice:
         if int(zone_enable) in [0, 1]:
             try:
                 # Audioflow device expects the zone name in the same payload when enabling/disabling zone, so we append the existing name here
-                async with httpx.AsyncClient() as httpx_async:
-                    await httpx_async.put(
-                        url=device_url + "zonename/" + str(zone_no),
-                        data=str(str(zone_enable) + str(switch_names[int(zone_no) - 1]).strip()),
-                        timeout=self.timeout,
-                    )
+                await self.http.put(
+                    url=device_url + "zonename/" + str(zone_no),
+                    data=str(str(zone_enable) + str(switch_names[int(zone_no) - 1]).strip()),
+                    timeout=self.timeout,
+                )
                 await self.get_one_zone(serial_no, zone_no)
             except Exception as e:
                 logging.error(f"Enable/disable zone for device at {ip} failed: {e}")
@@ -247,23 +238,22 @@ class AudioflowDevice:
         device_url = self.devices[serial_no]["device_url"]
         ip = self.devices[serial_no]["ip_addr"]
         try:
-            async with httpx.AsyncClient() as httpx_async:
-                await httpx_async.get(url=device_url + "reboot_now", timeout=self.timeout)
+            await self.http.get(url=device_url + "reboot_now", timeout=self.timeout)
             logging.info(f"Reboot command sent to Audioflow device at {ip}.")
         except Exception as e:
             logging.error(f"Reboot command for device at {ip} failed: {e}")
 
-    async def poll_device_state(self, serial_no, httpx_async):
+    async def poll_device_state(self, serial_no):
         """Poll for Audioflow device information every 10 seconds in case button(s) is/are pressed on device"""
         while True:
             await asyncio.sleep(10)
-            await self.get_all_zones(serial_no, httpx_async)
+            await self.get_all_zones(serial_no)
 
-    async def poll_network_info(self, serial_no, httpx_async):
+    async def poll_network_info(self, serial_no):
         """Poll for Audioflow device network information every 60 seconds"""
         while True:
             await asyncio.sleep(60)
-            await self.get_network_info(serial_no, httpx_async)
+            await self.get_network_info(serial_no)
 
     async def mqtt_discovery(self, serial_no, client):
         """Send Home Assistant MQTT discovery payloads"""

@@ -55,12 +55,12 @@ class TestParseCommandTopic:
         }
 
     def test_reboot(self):
-        # Reboot has no "/set" segment, so the serial must come from the path.
+        # Reboot has no zone segment, so the serial must come from the path.
         topic = f"{BASE_TOPIC}/{SERIAL}/reboot"
         assert parse_command_topic(topic, BASE_TOPIC) == {
             "command": "reboot",
             "serial_no": SERIAL,
-            "switch_no": "t",
+            "switch_no": None,
             "all_zones": False,
         }
 
@@ -69,6 +69,18 @@ class TestParseCommandTopic:
         # state topics it publishes itself; those must be ignored.
         topic = f"{BASE_TOPIC}/{SERIAL}/zone_state/1"
         assert parse_command_topic(topic, BASE_TOPIC) is None
+
+    def test_base_topic_containing_command_word_does_not_misfire(self):
+        # Command matching is per-segment, so a base topic that contains a
+        # command-like word must not be mistaken for that command.
+        base = "set_zone_state_room"
+        topic = f"{base}/{SERIAL}/reboot"
+        assert parse_command_topic(topic, base) == {
+            "command": "reboot",
+            "serial_no": SERIAL,
+            "switch_no": None,
+            "all_zones": False,
+        }
 
     def test_custom_base_topic(self):
         topic = f"livingroom/{SERIAL}/set_zone_state/3"
