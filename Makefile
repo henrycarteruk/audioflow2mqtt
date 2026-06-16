@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install run lint format test coverage hooks docker
+.PHONY: help install run lint format typecheck test coverage hooks docker
 
 IMAGE ?= audioflow2mqtt:latest
 
@@ -18,6 +18,9 @@ lint: ## Check code with ruff
 
 format: ## Format code with ruff
 	uv run ruff format .
+
+typecheck: ## Run the static type checker
+	uv run mypy audioflow2mqtt
 
 test: ## Run the test suite
 	uv run pytest

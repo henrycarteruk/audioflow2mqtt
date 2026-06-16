@@ -25,6 +25,9 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format --check .
 
+      - name: Type check
+        run: uv run mypy audioflow2mqtt
+
       - name: Tests
         run: uv run pytest --cov=audioflow2mqtt --cov-report=term-missing
 

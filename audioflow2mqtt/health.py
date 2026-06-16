@@ -1,14 +1,24 @@
 """Minimal HTTP health-check endpoint for container orchestration."""
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import logging
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from audioflow2mqtt.config import Config
+    from audioflow2mqtt.device import AudioflowDevice
+    from audioflow2mqtt.mqtt import Mqtt
 
 DEFAULT_STALENESS_SECONDS = 30
 
 
-def evaluate_health(mqtt_connected, devices, now, staleness_seconds=DEFAULT_STALENESS_SECONDS):
+def evaluate_health(
+    mqtt_connected: bool, devices: dict[str, dict], now: float, staleness_seconds: int = DEFAULT_STALENESS_SECONDS
+) -> tuple[bool, list[str]]:
     """Evaluate gateway health from current state (pure, no I/O).
 
     Returns ``(healthy, issues)``: unhealthy if MQTT is disconnected, or if any
@@ -24,7 +34,9 @@ def evaluate_health(mqtt_connected, devices, now, staleness_seconds=DEFAULT_STAL
     return (not issues, issues)
 
 
-async def health_check_server(config, device, mqtt, staleness_seconds=DEFAULT_STALENESS_SECONDS):
+async def health_check_server(
+    config: Config, device: AudioflowDevice, mqtt: Mqtt, staleness_seconds: int = DEFAULT_STALENESS_SECONDS
+) -> None:
     """Serve a plain-text health endpoint on ``config.health_check_port``.
 
     Responds 200 when healthy and 503 (with a reason body) when not. The
@@ -32,7 +44,7 @@ async def health_check_server(config, device, mqtt, staleness_seconds=DEFAULT_ST
     hit any URL.
     """
 
-    async def handle(reader, writer):
+    async def handle(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
             # Read (and discard) the request, but don't let a client that
             # connects and sends nothing hold the connection open indefinitely.

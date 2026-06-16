@@ -13,7 +13,7 @@ import yaml
 VERSION = "0.8.1"
 
 
-def env_to_bool(value, default=True):
+def env_to_bool(value: object, default: bool = True) -> bool:
     """Interpret an environment-variable string (or bool) as a boolean.
 
     Returns ``default`` when ``value`` is ``None`` (variable unset). Otherwise
@@ -36,7 +36,7 @@ class Config:
     mqtt_qos: int = 1
     base_topic: str = "audioflow2mqtt"
     home_assistant: bool = True
-    device_ips: list | None = None
+    device_ips: list[str] | None = None
     log_level: str = "INFO"
     discovery_port: int = 54321
     health_check_port: int = 8080
@@ -44,7 +44,7 @@ class Config:
     version: str = VERSION
 
 
-def load_config(config_path="config.yaml"):
+def load_config(config_path: str = "config.yaml") -> Config:
     """Load configuration from ``config_path`` if it exists, else from the environment.
 
     ``device_ips`` is normalised to a list (or ``None``) regardless of source.
