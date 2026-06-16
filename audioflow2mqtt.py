@@ -519,20 +519,19 @@ async def main():
             n.sock.close()
             sys.exit(1)
 
-    httpx_async = httpx.AsyncClient()
+    async with httpx.AsyncClient() as httpx_async:
+        for ip in device_ips:
+            device_url = f'http://{ip}/'
+            await d.get_device_info(device_url, ip, nwk_discovery, httpx_async)
+        device_state_polling = [d.poll_device_state(serial_no, httpx_async) for serial_no in d.serial_nos]
+        network_info_polling = [d.poll_network_info(serial_no, httpx_async) for serial_no in d.serial_nos]
 
-    for ip in device_ips:
-        device_url = f'http://{ip}/'
-        await d.get_device_info(device_url, ip, nwk_discovery, httpx_async)
-    device_state_polling = [d.poll_device_state(serial_no, httpx_async) for serial_no in d.serial_nos]
-    network_info_polling = [d.poll_network_info(serial_no, httpx_async) for serial_no in d.serial_nos]
-
-    await asyncio.gather(
-        m.mqtt_init(),
-        *device_state_polling,
-        *network_info_polling,
-        m.mqtt_reconnect()
-    )
+        await asyncio.gather(
+            m.mqtt_init(),
+            *device_state_polling,
+            *network_info_polling,
+            m.mqtt_reconnect()
+        )
 
 if __name__ == '__main__':
     asyncio.run(main())
