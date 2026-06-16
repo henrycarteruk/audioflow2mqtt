@@ -91,7 +91,7 @@ class NetworkDiscovery:
                     logging.debug(f'Discovery response received from {self.info[0]}; already in list of discovered devices')
 
         except Exception as e:
-            print(f'Unable to receive: {e}')
+            logging.error(f'Unable to receive: {e}')
 
 class AudioflowDevice:
     global client
@@ -393,7 +393,7 @@ class AudioflowDevice:
                             }), qos=1, retain=True)
 
             except Exception as e:
-                print(f'Unable to publish Home Assistant MQTT discovery payloads: {e}')
+                logging.error(f'Unable to publish Home Assistant MQTT discovery payloads: {e}')
 
 d = AudioflowDevice()
 n = NetworkDiscovery()
@@ -476,10 +476,11 @@ class Mqtt:
 m = Mqtt()
 
 async def main():
-    if LOG_LEVEL.lower() not in ['debug', 'info', 'warning', 'error']:
+    valid_log_levels = ['debug', 'info', 'warning', 'error']
+    log_level_invalid = LOG_LEVEL.lower() not in valid_log_levels
+    logging.basicConfig(level='INFO' if log_level_invalid else LOG_LEVEL, format='%(asctime)s %(levelname)s: %(message)s')
+    if log_level_invalid:
         logging.warning(f'Selected log level "{LOG_LEVEL}" is not valid; using default (info)')
-    else:
-        logging.basicConfig(level=LOG_LEVEL, format='%(asctime)s %(levelname)s: %(message)s')
 
     logging.info(f'=== audioflow2mqtt version {version} started ===')
 
