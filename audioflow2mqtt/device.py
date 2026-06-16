@@ -6,7 +6,7 @@ import asyncio
 import json
 import logging
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from audioflow2mqtt.parsing import parse_wifi_info
 
@@ -19,14 +19,21 @@ if TYPE_CHECKING:
 
 
 class AudioflowDevice:
+    # Wired by the caller after construction (see app.main): the Mqtt instance
+    # needs this device, so the two references are attached once both exist.
+    mqtt: Mqtt
+    http: httpx.AsyncClient
+
     def __init__(self, config: Config, mqtt: Mqtt | None = None, http: httpx.AsyncClient | None = None) -> None:
         self.config = config
-        self.mqtt = mqtt  # set by the caller after the Mqtt instance is created
-        self.http = http  # shared httpx.AsyncClient, set by the caller in main()
+        if mqtt is not None:
+            self.mqtt = mqtt
+        if http is not None:
+            self.http = http
         self.timeout = 3
         self.states = ["off", "on"]
         self.set_all_zones = {"off": "0 0 0 0", "on": "1 1 1 1"}
-        self.devices: dict[str, dict] = {}
+        self.devices: dict[str, dict[str, Any]] = {}
         self.serial_nos: list[str] = []
 
     async def get_device_info(self, device_url: str, ip: str, nwk_discovery: bool) -> None:
@@ -95,6 +102,7 @@ class AudioflowDevice:
             network_info = parse_wifi_info(device_info["wifi"])
 
             if self.mqtt.connected:
+                assert self.mqtt.client is not None
                 try:
                     for x in network_info:
                         await self.mqtt.client.publish(
@@ -115,6 +123,7 @@ class AudioflowDevice:
             logging.error(f"Unable to get zone info: {e}")
 
         if self.mqtt.connected:
+            assert self.mqtt.client is not None
             try:
                 zones = self.devices[serial_no]["zones"]["zones"]
                 await self.mqtt.client.publish(
@@ -144,6 +153,7 @@ class AudioflowDevice:
             self.devices[serial_no]["retry_count"] = 0
             self.devices[serial_no]["last_poll_success"] = time.monotonic()
             if self.mqtt.connected:
+                assert self.mqtt.client is not None
                 await self.mqtt.client.publish(
                     f"{self.config.base_topic}/{serial_no}/status", "online", qos=self.config.mqtt_qos, retain=True
                 )
@@ -153,6 +163,7 @@ class AudioflowDevice:
             self.devices[serial_no]["retry_count"] += 1
             if retry_count == 3:
                 if self.mqtt.connected:
+                    assert self.mqtt.client is not None
                     await self.mqtt.client.publish(
                         f"{self.config.base_topic}/{serial_no}/status",
                         "offline",
@@ -167,6 +178,7 @@ class AudioflowDevice:
         zone_count = self.devices[serial_no]["zone_count"]
         zones = self.devices[serial_no]["zones"]["zones"]
         if self.mqtt.connected:
+            assert self.mqtt.client is not None
             try:
                 for x in range(1, zone_count + 1):
                     await self.mqtt.client.publish(
@@ -200,7 +212,9 @@ class AudioflowDevice:
                         data = self.states.index(zone_state)
                     else:
                         data = 1 if current_state == "off" else 0
-                    await self.http.put(url=device_url + "zones/" + str(zone_no), data=str(data), timeout=self.timeout)
+                    await self.http.put(
+                        url=device_url + "zones/" + str(zone_no), content=str(data), timeout=self.timeout
+                    )
                     await self.get_one_zone(
                         serial_no, zone_no
                     )  # Device does not send new state after state change, so we get the new state and publish it to MQTT
@@ -216,7 +230,7 @@ class AudioflowDevice:
         if zone_state in self.states:
             try:
                 data = self.set_all_zones[zone_state]
-                await self.http.put(url=device_url + "zones", data=str(data), timeout=self.timeout)
+                await self.http.put(url=device_url + "zones", content=str(data), timeout=self.timeout)
                 # Device does not send new state after state change, so we get the new state and publish it to MQTT
                 await self.get_all_zones(serial_no)
             except Exception as e:
@@ -236,7 +250,7 @@ class AudioflowDevice:
                 # Audioflow device expects the zone name in the same payload when enabling/disabling zone, so we append the existing name here
                 await self.http.put(
                     url=device_url + "zonename/" + str(zone_no),
-                    data=str(str(zone_enable) + str(switch_names[int(zone_no) - 1]).strip()),
+                    content=str(str(zone_enable) + str(switch_names[int(zone_no) - 1]).strip()),
                     timeout=self.timeout,
                 )
                 await self.get_one_zone(serial_no, zone_no)
@@ -280,14 +294,14 @@ class AudioflowDevice:
             ha_sensor = "homeassistant/sensor/"
             try:
                 # HA switch entities
-                for x in range(1, zone_count + 1):
+                for zone in range(1, zone_count + 1):
                     name_suffix = (
-                        " (Disabled)" if zone_info[int(x) - 1]["enabled"] == 0 else ""
+                        " (Disabled)" if zone_info[int(zone) - 1]["enabled"] == 0 else ""
                     )  # append "(Disabled)" to the end of the default entity name if zone is disabled
-                    entity_name = f"{switch_names[x - 1]} speakers{name_suffix}"
+                    entity_name = f"{switch_names[zone - 1]} speakers{name_suffix}"
                     entity_id = f"switch.{entity_name.replace(' ', '_').lower()}_{serial_no}"
                     await client.publish(
-                        f"{ha_switch}{serial_no}/{x}/config",
+                        f"{ha_switch}{serial_no}/{zone}/config",
                         json.dumps(
                             {
                                 "availability": [
@@ -296,11 +310,11 @@ class AudioflowDevice:
                                 ],
                                 "name": entity_name,
                                 "default_entity_id": entity_id,
-                                "command_topic": f"{base_topic}/{serial_no}/set_zone_state/{x}",
-                                "state_topic": f"{base_topic}/{serial_no}/zone_state/{x}",
+                                "command_topic": f"{base_topic}/{serial_no}/set_zone_state/{zone}",
+                                "state_topic": f"{base_topic}/{serial_no}/zone_state/{zone}",
                                 "payload_on": "on",
                                 "payload_off": "off",
-                                "unique_id": f"{serial_no}{x}",
+                                "unique_id": f"{serial_no}{zone}",
                                 "icon": "mdi:speaker",
                                 "device": {
                                     "name": f"{name}",
@@ -317,11 +331,11 @@ class AudioflowDevice:
                     )
 
                 # HA button entities
-                for x in ["off", "on"]:
-                    entity_name = f"Turn all zones {x}"
+                for state in ["off", "on"]:
+                    entity_name = f"Turn all zones {state}"
                     entity_id = f"button.{entity_name.replace(' ', '_').lower()}_{serial_no}"
                     await client.publish(
-                        f"{ha_button}{serial_no}/all_zones_{x}/config",
+                        f"{ha_button}{serial_no}/all_zones_{state}/config",
                         json.dumps(
                             {
                                 "availability": [
@@ -331,9 +345,9 @@ class AudioflowDevice:
                                 "name": entity_name,
                                 "default_entity_id": entity_id,
                                 "command_topic": f"{base_topic}/{serial_no}/set_zone_state",
-                                "payload_press": x,
-                                "unique_id": f"{serial_no}_all_zones_{x}",
-                                "icon": f"mdi:power-{x}",
+                                "payload_press": state,
+                                "unique_id": f"{serial_no}_all_zones_{state}",
+                                "icon": f"mdi:power-{state}",
                                 "device": {
                                     "name": f"{name}",
                                     "identifiers": f"{serial_no}",
@@ -383,11 +397,11 @@ class AudioflowDevice:
                     "channel": {"name": "Wi-Fi channel", "icon": "mdi:access-point"},
                     "rssi": {"name": "RSSI", "icon": "mdi:signal"},
                 }
-                for x in network_info_names:
-                    entity_name = f"{network_info_names[x]['name']}"
+                for key in network_info_names:
+                    entity_name = f"{network_info_names[key]['name']}"
                     entity_id = f"sensor.{entity_name.replace(' ', '_').lower()}_{serial_no}"
                     await client.publish(
-                        f"{ha_sensor}{serial_no}/{x}/config",
+                        f"{ha_sensor}{serial_no}/{key}/config",
                         json.dumps(
                             {
                                 "availability": [
@@ -396,9 +410,9 @@ class AudioflowDevice:
                                 ],
                                 "name": entity_name,
                                 "default_entity_id": entity_id,
-                                "state_topic": f"{base_topic}/{serial_no}/network_info/{x}",
-                                "icon": f"{network_info_names[x]['icon']}",
-                                "unique_id": f"{serial_no}{x}",
+                                "state_topic": f"{base_topic}/{serial_no}/network_info/{key}",
+                                "icon": f"{network_info_names[key]['icon']}",
+                                "unique_id": f"{serial_no}{key}",
                                 "device": {
                                     "name": f"{name}",
                                     "identifiers": f"{serial_no}",

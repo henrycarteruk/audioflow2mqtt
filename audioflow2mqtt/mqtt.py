@@ -62,19 +62,23 @@ class Mqtt:
                 cmd = parse_command_topic(str(msg.topic), self.config.base_topic)
                 if cmd is None:
                     continue
+                serial_no = cmd["serial_no"]
+                switch_no = cmd["switch_no"]
                 if cmd["command"] == "set_zone_state":
                     if cmd["all_zones"]:  # no zone number present in topic
-                        await self.device.set_all_zone_states(cmd["serial_no"], payload)
-                    else:
-                        await self.device.set_zone_state(cmd["serial_no"], cmd["switch_no"], payload)
-                elif cmd["command"] == "set_zone_enable":
-                    await self.device.set_zone_enable(cmd["serial_no"], cmd["switch_no"], payload)
+                        await self.device.set_all_zone_states(serial_no, payload)
+                    elif switch_no is not None:
+                        await self.device.set_zone_state(serial_no, switch_no, payload)
+                elif cmd["command"] == "set_zone_enable" and switch_no is not None:
+                    await self.device.set_zone_enable(serial_no, switch_no, payload)
                 elif cmd["command"] == "reboot":
-                    await self.device.reboot_device(cmd["serial_no"])
+                    await self.device.reboot_device(serial_no)
         except aiomqtt.MqttError:
             self.connected = False
 
     async def mqtt_init(self) -> None:
+        # main() exits if mqtt_host is unset, so it is always present here.
+        assert self.config.mqtt_host is not None
         try:
             async with aiomqtt.Client(
                 hostname=self.config.mqtt_host,
