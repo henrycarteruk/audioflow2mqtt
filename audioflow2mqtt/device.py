@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+import time
 
 import httpx
 
@@ -42,6 +43,7 @@ class AudioflowDevice:
             self.devices[serial_no]["zones"] = {}
             self.devices[serial_no]["switch_names"] = []
             self.devices[serial_no]["retry_count"] = 0
+            self.devices[serial_no]["last_poll_success"] = time.monotonic()
             self.serial_nos.append(serial_no)
 
             for item in device_info:
@@ -133,6 +135,7 @@ class AudioflowDevice:
             if retry_count > 0:
                 logging.info(f"Reconnected to Audioflow device at {ip}.")
             self.devices[serial_no]["retry_count"] = 0
+            self.devices[serial_no]["last_poll_success"] = time.monotonic()
             if self.mqtt.connected:
                 await self.mqtt.client.publish(
                     f"{self.config.base_topic}/{serial_no}/status", "online", qos=self.config.mqtt_qos, retain=True

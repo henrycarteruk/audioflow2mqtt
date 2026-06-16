@@ -39,6 +39,7 @@ class Config:
     device_ips: list | None = None
     log_level: str = "INFO"
     discovery_port: int = 54321
+    health_check_port: int = 8080
     from_file: bool = False
     version: str = VERSION
 
@@ -64,6 +65,7 @@ def load_config(config_path="config.yaml"):
             device_ips=gen.get("devices"),
             log_level=gen["log_level"].upper() if "log_level" in gen else "INFO",
             discovery_port=gen.get("discovery_port", 54321),
+            health_check_port=gen.get("health_check_port", 8080),
             from_file=True,
         )
 
@@ -79,5 +81,6 @@ def load_config(config_path="config.yaml"):
         device_ips=device_ips_env.split(",") if device_ips_env is not None else None,
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         discovery_port=int(os.getenv("DISCOVERY_PORT", 54321)),
+        health_check_port=int(os.getenv("HEALTH_CHECK_PORT", 8080)),
         from_file=False,
     )
