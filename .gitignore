@@ -13,5 +13,8 @@ __pycache__/
 venv/
 env/
 
+# Editors / IDEs
+.idea/
+
 # Build artifacts
 qemu-arm-static
