@@ -28,6 +28,9 @@ select = ["E", "F", "W", "I"]
 # Line length is enforced by the formatter; long strings/URLs are exempt.
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+known-first-party = ["audioflow2mqtt"]
+
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]

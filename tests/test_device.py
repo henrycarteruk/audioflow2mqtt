@@ -2,7 +2,7 @@
 
 import asyncio
 
-from audioflow2mqtt import AudioflowDevice
+from audioflow2mqtt import AudioflowDevice, Config
 
 
 class _RaisingClient:
@@ -15,7 +15,7 @@ class _RaisingClient:
 def test_get_network_info_survives_request_failure():
     # Regression: a failed request used to fall through to json.loads on an
     # unset variable, raising UnboundLocalError and killing the poll loop.
-    device = AudioflowDevice()
+    device = AudioflowDevice(Config())
     serial = "0123456789"
     device.devices[serial] = {"device_url": "http://device/", "retry_count": 0}
 

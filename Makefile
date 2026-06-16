@@ -11,7 +11,7 @@ install: ## Create the virtualenv and install pinned dependencies
 	uv sync
 
 run: ## Run the gateway
-	uv run python audioflow2mqtt.py
+	uv run python -m audioflow2mqtt
 
 lint: ## Check code with ruff
 	uv run ruff check .
