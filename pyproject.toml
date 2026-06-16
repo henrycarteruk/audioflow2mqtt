@@ -1,0 +1,20 @@
+[project]
+name = "audioflow2mqtt"
+version = "0.8.1"
+description = "Audioflow speaker switch to MQTT gateway with Home Assistant discovery"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "aiomqtt>=2.0",
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.6",
+    "pytest>=8.0",
+]
+
+[tool.uv]
+package = false
