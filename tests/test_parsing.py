@@ -54,6 +54,16 @@ class TestParseCommandTopic:
             "all_zones": False,
         }
 
+    def test_reboot(self):
+        # Reboot has no "/set" segment, so the serial must come from the path.
+        topic = f"{BASE_TOPIC}/{SERIAL}/reboot"
+        assert parse_command_topic(topic, BASE_TOPIC) == {
+            "command": "reboot",
+            "serial_no": SERIAL,
+            "switch_no": "t",
+            "all_zones": False,
+        }
+
     def test_non_command_topic_returns_none(self):
         # The gateway subscribes to the whole serial subtree, including the
         # state topics it publishes itself; those must be ignored.
