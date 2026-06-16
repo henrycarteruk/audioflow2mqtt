@@ -17,27 +17,29 @@ def parse_command_topic(topic, base_topic):
     if the topic is not a recognised command. ``all_zones`` is only meaningful
     for ``set_zone_state`` (a topic with no trailing zone number).
     """
-    # The serial number is the path segment immediately after the base topic.
-    # Derive it from the path (not from the position of "/set") so it works for
-    # every command, including those without a "/set" segment such as reboot.
+    # Split the path after the base topic into its segments so command matching
+    # is exact (a base topic containing a command-like word can't misfire) and
+    # works for any command, including those without a "/set" segment.
     remainder = topic[topic.find(base_topic) + len(base_topic) + 1 :]
-    serial_no = remainder.split("/")[0]
-    switch_no = topic[-1:]
-    if "set_zone_state" in topic:
+    parts = remainder.split("/")
+    serial_no = parts[0]
+    command = parts[1] if len(parts) > 1 else ""
+    switch_no = parts[2] if len(parts) > 2 else None
+    if command == "set_zone_state":
         return {
             "command": "set_zone_state",
             "serial_no": serial_no,
             "switch_no": switch_no,
-            "all_zones": topic.endswith("e"),
+            "all_zones": switch_no is None,
         }
-    if "set_zone_enable" in topic:
+    if command == "set_zone_enable":
         return {
             "command": "set_zone_enable",
             "serial_no": serial_no,
             "switch_no": switch_no,
             "all_zones": False,
         }
-    if topic.endswith("/reboot"):
+    if command == "reboot":
         return {
             "command": "reboot",
             "serial_no": serial_no,

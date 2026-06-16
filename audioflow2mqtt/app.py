@@ -83,11 +83,12 @@ async def main():
             sys.exit(1)
 
     async with httpx.AsyncClient() as httpx_async:
+        device.http = httpx_async
         for ip in device_ips:
             device_url = f"http://{ip}/"
-            await device.get_device_info(device_url, ip, nwk_discovery, httpx_async)
-        device_state_polling = [device.poll_device_state(serial_no, httpx_async) for serial_no in device.serial_nos]
-        network_info_polling = [device.poll_network_info(serial_no, httpx_async) for serial_no in device.serial_nos]
+            await device.get_device_info(device_url, ip, nwk_discovery)
+        device_state_polling = [device.poll_device_state(serial_no) for serial_no in device.serial_nos]
+        network_info_polling = [device.poll_network_info(serial_no) for serial_no in device.serial_nos]
 
         await asyncio.gather(
             mqtt.mqtt_init(),
