@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=uv.lock,target=uv.lock \
     uv sync --frozen --no-dev --no-install-project
 
-COPY audioflow2mqtt.py ./
+COPY audioflow2mqtt/ ./audioflow2mqtt/
 
 # Run directly from the venv python (no uv resolution at container startup)
-CMD ["python", "audioflow2mqtt.py"]
+CMD ["python", "-m", "audioflow2mqtt"]
