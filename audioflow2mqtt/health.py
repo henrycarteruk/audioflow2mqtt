@@ -1,6 +1,7 @@
 """Minimal HTTP health-check endpoint for container orchestration."""
 
 import asyncio
+import contextlib
 import logging
 import time
 
@@ -35,10 +36,8 @@ async def health_check_server(config, device, mqtt, staleness_seconds=DEFAULT_ST
         try:
             # Read (and discard) the request, but don't let a client that
             # connects and sends nothing hold the connection open indefinitely.
-            try:
+            with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(reader.read(1024), timeout=5)
-            except asyncio.TimeoutError:
-                pass
             now = time.monotonic()
             healthy, issues = evaluate_health(mqtt.connected, device.devices, now, staleness_seconds)
             if healthy:

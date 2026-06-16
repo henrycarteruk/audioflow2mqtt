@@ -86,7 +86,7 @@ class AudioflowDevice:
 
             if self.mqtt.connected:
                 try:
-                    for x in network_info.keys():
+                    for x in network_info:
                         await self.mqtt.client.publish(
                             f"{self.config.base_topic}/{serial_no}/network_info/{x}",
                             network_info[x],
@@ -373,7 +373,7 @@ class AudioflowDevice:
                     "channel": {"name": "Wi-Fi channel", "icon": "mdi:access-point"},
                     "rssi": {"name": "RSSI", "icon": "mdi:signal"},
                 }
-                for x in network_info_names.keys():
+                for x in network_info_names:
                     entity_name = f"{network_info_names[x]['name']}"
                     entity_id = f"sensor.{entity_name.replace(' ', '_').lower()}_{serial_no}"
                     await client.publish(
