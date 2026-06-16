@@ -50,7 +50,7 @@ def load_config(config_path="config.yaml"):
     ``device_ips`` is normalised to a list (or ``None``) regardless of source.
     """
     if os.path.exists(config_path):
-        with open(config_path, "r") as file:
+        with open(config_path) as file:
             config = yaml.safe_load(file)
         mqtt = config["mqtt"]
         gen = config["general"]
