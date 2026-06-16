@@ -105,7 +105,7 @@ def test_set_zone_state_puts_and_republishes():
     add_device(device)
     asyncio.run(device.set_zone_state(SERIAL, "1", "on"))
 
-    assert any(url.endswith("zones/1") and kw.get("data") == "1" for _, url, kw in device.http.puts)
+    assert any(url.endswith("zones/1") and kw.get("content") == "1" for _, url, kw in device.http.puts)
     topics = {t for t, _, _ in device.mqtt.client.published}
     assert f"audioflow2mqtt/{SERIAL}/zone_state/1" in topics
 
@@ -143,7 +143,7 @@ def test_set_all_zone_states_on_puts_and_republishes():
     device = make_device({"zones": after})
     add_device(device)
     asyncio.run(device.set_all_zone_states(SERIAL, "on"))
-    assert any(url.endswith("/zones") and kw.get("data") == "1 1 1 1" for _, url, kw in device.http.puts)
+    assert any(url.endswith("/zones") and kw.get("content") == "1 1 1 1" for _, url, kw in device.http.puts)
 
 
 def test_set_all_zone_states_toggle_rejected():
