@@ -27,3 +27,7 @@ target-version = "py311"
 select = ["E", "F", "W", "I"]
 # Line length is enforced by the formatter; long strings/URLs are exempt.
 ignore = ["E501"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
