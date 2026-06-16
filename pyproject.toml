@@ -16,6 +16,7 @@ dev = [
     "pytest>=8.0",
     "pytest-cov>=7.1.0",
     "pre-commit>=4.6.0",
+    "mypy>=2.1.0",
 ]
 
 [tool.uv]
@@ -36,6 +37,24 @@ known-first-party = ["audioflow2mqtt"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+
+# The pure, side-effect-free modules are held to full annotation coverage.
+[[tool.mypy.overrides]]
+module = ["audioflow2mqtt.config", "audioflow2mqtt.parsing", "audioflow2mqtt.health"]
+disallow_untyped_defs = true
+
+# device/mqtt are typed at the signature level. Their bodies use a dynamically
+# shaped device dict, attributes wired after construction (self.mqtt/http/client),
+# and raw-string httpx bodies; modelling all that precisely is future work, so
+# the resulting body-level noise is suppressed here. Both modules have runtime
+# behavioural test coverage.
+[[tool.mypy.overrides]]
+module = ["audioflow2mqtt.device", "audioflow2mqtt.mqtt"]
+disable_error_code = ["union-attr", "arg-type", "assignment", "index"]
 
 [tool.coverage.run]
 source = ["audioflow2mqtt"]

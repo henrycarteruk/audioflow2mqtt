@@ -1,23 +1,30 @@
 """MQTT connection, subscription, discovery and command handling."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 import aiomqtt
 
 from audioflow2mqtt.parsing import parse_command_topic
 
+if TYPE_CHECKING:
+    from audioflow2mqtt.config import Config
+    from audioflow2mqtt.device import AudioflowDevice
+
 
 class Mqtt:
-    def __init__(self, config, device):
+    def __init__(self, config: Config, device: AudioflowDevice) -> None:
         self.config = config
         self.device = device
-        self.client = None
+        self.client: aiomqtt.Client | None = None
         self.connected = False
         self.reconnect_attempts = 0
         self.reconnect_interval = 10
 
-    async def mqtt_connect(self, client):
+    async def mqtt_connect(self, client: aiomqtt.Client) -> None:
         try:
             await client.publish(f"{self.config.base_topic}/status", "online", qos=1, retain=True)
             logging.info("Connected to MQTT broker.")
@@ -27,7 +34,7 @@ class Mqtt:
             logging.error(f"Unable to connect to MQTT broker: {e}")
             self.connected = False
 
-    async def mqtt_subscribe(self, client):
+    async def mqtt_subscribe(self, client: aiomqtt.Client) -> None:
         try:
             for serial_no in self.device.serial_nos:
                 await client.publish(
@@ -40,7 +47,7 @@ class Mqtt:
             logging.error(f"Unable to subscribe to MQTT topic: {e}")
             self.connected = False
 
-    async def start_mqtt_discovery(self, client):
+    async def start_mqtt_discovery(self, client: aiomqtt.Client) -> None:
         try:
             for serial_no in self.device.serial_nos:
                 await self.device.mqtt_discovery(serial_no, client)
@@ -48,7 +55,7 @@ class Mqtt:
         except aiomqtt.MqttError as e:
             logging.error(f"Unable to publish MQTT discovery payload: {e}")
 
-    async def mqtt_listener(self, client):
+    async def mqtt_listener(self, client: aiomqtt.Client) -> None:
         try:
             async for msg in client.messages:
                 payload = msg.payload.decode("utf-8")
@@ -67,7 +74,7 @@ class Mqtt:
         except aiomqtt.MqttError:
             self.connected = False
 
-    async def mqtt_init(self):
+    async def mqtt_init(self) -> None:
         try:
             async with aiomqtt.Client(
                 hostname=self.config.mqtt_host,
@@ -87,7 +94,7 @@ class Mqtt:
             self.client = None
             self.connected = False
 
-    async def mqtt_reconnect(self):
+    async def mqtt_reconnect(self) -> None:
         while True:
             await asyncio.sleep(self.reconnect_interval)
             if not self.connected:
