@@ -25,5 +25,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 COPY audioflow2mqtt/ ./audioflow2mqtt/
 
+# Health-check endpoint (default port; override with HEALTH_CHECK_PORT at runtime)
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+    CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+
 # Run directly from the venv python (no uv resolution at container startup)
 CMD ["python", "-m", "audioflow2mqtt"]

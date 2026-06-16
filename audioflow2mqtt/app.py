@@ -10,6 +10,7 @@ import httpx
 from audioflow2mqtt.config import load_config
 from audioflow2mqtt.device import AudioflowDevice
 from audioflow2mqtt.discovery import NetworkDiscovery
+from audioflow2mqtt.health import health_check_server
 from audioflow2mqtt.mqtt import Mqtt
 
 
@@ -74,4 +75,10 @@ async def main():
         device_state_polling = [device.poll_device_state(serial_no, httpx_async) for serial_no in device.serial_nos]
         network_info_polling = [device.poll_network_info(serial_no, httpx_async) for serial_no in device.serial_nos]
 
-        await asyncio.gather(mqtt.mqtt_init(), *device_state_polling, *network_info_polling, mqtt.mqtt_reconnect())
+        await asyncio.gather(
+            mqtt.mqtt_init(),
+            *device_state_polling,
+            *network_info_polling,
+            mqtt.mqtt_reconnect(),
+            health_check_server(config, device, mqtt),
+        )
