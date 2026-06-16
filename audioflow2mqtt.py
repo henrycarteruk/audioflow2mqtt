@@ -44,6 +44,41 @@ else:
     DISCOVERY_PORT = int(os.getenv("DISCOVERY_PORT", 54321))
 
 
+def parse_wifi_info(wifi):
+    """Parse the device's wifi status string into ssid/channel/rssi."""
+    ssid = wifi[: wifi.find("[")].strip()
+    channel = wifi[wifi.find("[") + 1 : wifi.find("]")].strip()
+    rssi = wifi[wifi.find("]") + 3 :].replace("dBm", "").replace(")", "").strip()
+    return {"ssid": ssid, "channel": channel, "rssi": rssi}
+
+
+def parse_command_topic(topic, base_topic):
+    """Parse an MQTT command topic into the command and its target.
+
+    Returns a dict with ``command``, ``serial_no``, ``switch_no`` and
+    ``all_zones``, or ``None`` if the topic is not a recognised command.
+    ``all_zones`` is only meaningful for ``set_zone_state`` (a topic with no
+    trailing zone number).
+    """
+    serial_no = topic[topic.find(base_topic) + len(base_topic) + 1 : topic.find("/set")]
+    switch_no = topic[-1:]
+    if "set_zone_state" in topic:
+        return {
+            "command": "set_zone_state",
+            "serial_no": serial_no,
+            "switch_no": switch_no,
+            "all_zones": topic.endswith("e"),
+        }
+    if "set_zone_enable" in topic:
+        return {
+            "command": "set_zone_enable",
+            "serial_no": serial_no,
+            "switch_no": switch_no,
+            "all_zones": False,
+        }
+    return None
+
+
 class NetworkDiscovery:
     def __init__(self):
         self.ping = b"afping"
@@ -172,11 +207,7 @@ class AudioflowDevice:
             except Exception as e:
                 logging.error(f"Unable to get network info: {e}")
             device_info = json.loads(device_info.text)
-            wifi = device_info["wifi"]
-            ssid = wifi[: wifi.find("[")].strip()
-            channel = wifi[wifi.find("[") + 1 : wifi.find("]")].strip()
-            rssi = wifi[wifi.find("]") + 3 :].replace("dBm", "").replace(")", "").strip()
-            network_info = {"ssid": ssid, "channel": channel, "rssi": rssi}
+            network_info = parse_wifi_info(device_info["wifi"])
 
             if m.mqtt_connected:
                 try:
@@ -497,16 +528,16 @@ class Mqtt:
         try:
             async for msg in client.messages:
                 payload = msg.payload.decode("utf-8")
-                topic = str(msg.topic)
-                serial_no = topic[topic.find(BASE_TOPIC) + len(BASE_TOPIC) + 1 : topic.find("/set")]
-                switch_no = topic[-1:]
-                if "set_zone_state" in topic:
-                    if topic.endswith("e"):  # if no zone number is present in topic
-                        await d.set_all_zone_states(serial_no, payload)
+                cmd = parse_command_topic(str(msg.topic), BASE_TOPIC)
+                if cmd is None:
+                    continue
+                if cmd["command"] == "set_zone_state":
+                    if cmd["all_zones"]:  # no zone number present in topic
+                        await d.set_all_zone_states(cmd["serial_no"], payload)
                     else:
-                        await d.set_zone_state(serial_no, switch_no, payload)
-                elif "set_zone_enable" in topic:
-                    await d.set_zone_enable(serial_no, switch_no, payload)
+                        await d.set_zone_state(cmd["serial_no"], cmd["switch_no"], payload)
+                elif cmd["command"] == "set_zone_enable":
+                    await d.set_zone_enable(cmd["serial_no"], cmd["switch_no"], payload)
         except aiomqtt.MqttError:
             self.mqtt_connected = False
 
