@@ -131,7 +131,9 @@ Running from source uses [uv](https://docs.astral.sh/uv/) for dependency managem
 4. `make install` — create the virtualenv and install the pinned dependencies
 5. `make run` — start the gateway
 
-Other targets: `make lint`, `make format`, `make test`, and `make docker` (build the image locally). Run `make` on its own to list them.
+Other targets: `make lint`, `make format`, `make test`, `make coverage`, and `make docker` (build the image locally). Run `make` on its own to list them.
+
+To catch lint/format issues before committing, install the git hooks once with `make hooks` (runs `ruff` on commit via [pre-commit](https://pre-commit.com/)).
 
 <br>
 

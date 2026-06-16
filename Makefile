@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install run lint format test docker
+.PHONY: help install run lint format test coverage hooks docker
 
 IMAGE ?= audioflow2mqtt:latest
 
@@ -21,6 +21,12 @@ format: ## Format code with ruff
 
 test: ## Run the test suite
 	uv run pytest
+
+coverage: ## Run the test suite with a coverage report
+	uv run pytest --cov=audioflow2mqtt --cov-report=term-missing
+
+hooks: ## Install the pre-commit hooks (ruff lint + format on commit)
+	uv run pre-commit install
 
 docker: ## Build the Docker image
 	docker build -t $(IMAGE) .

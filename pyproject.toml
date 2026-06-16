@@ -14,6 +14,8 @@ dependencies = [
 dev = [
     "ruff>=0.6",
     "pytest>=8.0",
+    "pytest-cov>=7.1.0",
+    "pre-commit>=4.6.0",
 ]
 
 [tool.uv]
@@ -34,3 +36,12 @@ known-first-party = ["audioflow2mqtt"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["audioflow2mqtt"]
+
+[tool.coverage.report]
+show_missing = true
+# Floor to guard against regression; the uncovered remainder is mostly the
+# socket/network code (app.main, discovery, mqtt_init) that needs a live setup.
+fail_under = 45
