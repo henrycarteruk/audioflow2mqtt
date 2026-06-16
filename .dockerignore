@@ -1,3 +1,7 @@
+# VCS
+.git
+.gitignore
+
 # Local configuration (may contain secrets)
 config.yaml
 
@@ -13,5 +17,9 @@ __pycache__/
 venv/
 env/
 
-# Build artifacts
-qemu-arm-static
+# Project / CI files not needed in the image
+README.md
+ha_screenshot.png
+docker-compose.yaml
+licenses/
+.github/
