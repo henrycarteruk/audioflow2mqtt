@@ -21,6 +21,7 @@ general:
   - 10.0.1.100
   - 10.0.1.101
   discovery_port: 54321
+  health_check_port: 8080
   log_level: debug
 ```
 
@@ -29,59 +30,41 @@ general:
 | Variable | Default | Required | Description |
 |----------|---------|----------|-------------|
 | `MQTT_HOST` | None | True |IP address or hostname of the MQTT broker to connect to. |
-| `MQTT_PORT` | 1883 | True | The port the MQTT broker is bound to. |
+| `MQTT_PORT` | 1883 | False | The port the MQTT broker is bound to. |
 | `MQTT_USER` | None | False | The user to send to the MQTT broker. |
 | `MQTT_PASSWORD` | None | False | The password to send to the MQTT broker. |
 | `MQTT_QOS` | 1 | False | The MQTT QoS level. |
-| `BASE_TOPIC` | audioflow2mqtt | True | The topic prefix to use for all payloads. |
+| `BASE_TOPIC` | audioflow2mqtt | False | The topic prefix to use for all payloads. |
 | `HOME_ASSISTANT` | True | False | Set to `True` to enable Home Assistant MQTT discovery or `False` to disable. |
 | `DEVICES` | None | Depends* | IP address(es) of your Audioflow device(s). If using environment variables, must be a comma-separated string (if multiple); otherwise, it must be a list. <br>\* Required if you don't plan to use UDP discovery. |
 | `DISCOVERY_PORT` | 54321 | False | The port to open on the host to send/receive UDP discovery packets. |
+| `HEALTH_CHECK_PORT` | 8080 | False | Port for the HTTP health-check endpoint (used by the Docker `HEALTHCHECK`). |
 | `LOG_LEVEL` | info | False | Set minimum log level. Valid options are `debug`, `info`, `warning`, and `error` |
 
 <br>
 
 # How to run
 
-**Docker via `docker-compose` with config.yaml**
+The image is published to Docker Hub as **`henrycarteruk/audioflow2mqtt`**, tagged by version (e.g. `henrycarteruk/audioflow2mqtt:0.8.1`). You can also build it yourself with `make docker`.
 
-1. Create your docker-compose.yaml (or add to existing). Example docker-compose.yaml:
+**docker-compose with config.yaml**
 ```yaml
-version: '3'
 services:
   audioflow2mqtt:
     container_name: audioflow2mqtt
-    image: tediore/audioflow2mqtt:stable
+    image: henrycarteruk/audioflow2mqtt:0.8.1
     volumes:
     - /path/to/config.yaml:/config.yaml
     restart: unless-stopped
-    network_mode: host # only required if devices option is not set in config.yaml
-```
-2. `docker-compose up -d audioflow2mqtt`
-
-<br>
-
-**Docker via `docker run` with config.yaml**
-
-Example `docker run` command:
-```
-docker run --name audioflow2mqtt \
--v /path/to/config.yaml:/config.yaml \
---network host \ # only required if devices option is not set in config.yaml
-tediore/audioflow2mqtt:stable
+    network_mode: host # only required if you rely on UDP discovery (no device IPs set)
 ```
 
-<br>
-
-**Docker via `docker-compose` without config.yaml**
-
-1. Create your docker-compose.yaml (or add to existing). Example docker-compose.yaml with all environmental variables:
+**docker-compose with environment variables** (no config.yaml)
 ```yaml
-version: '3'
 services:
   audioflow2mqtt:
     container_name: audioflow2mqtt
-    image: tediore/audioflow2mqtt:stable
+    image: henrycarteruk/audioflow2mqtt:0.8.1
     environment:
     - MQTT_HOST=10.0.0.2
     - MQTT_PORT=1883
@@ -92,32 +75,16 @@ services:
     - HOME_ASSISTANT=True
     - DEVICES=10.0.1.100,10.0.1.101
     - DISCOVERY_PORT=54321
+    - HEALTH_CHECK_PORT=8080
     - LOG_LEVEL=debug
-    - TZ=America/Chicago # optional, but will ensure logging has local time instead of UTC (change to your timezone).
+    - TZ=Europe/London # optional, but will ensure logging has local time instead of UTC (change to your timezone).
     restart: unless-stopped
-    network_mode: host # only required if DEVICES variable is not set
+    network_mode: host # only required if DEVICES is not set
 ```
-2. `docker-compose up -d audioflow2mqtt`
 
-<br>
+Bring it up with `docker-compose up -d audioflow2mqtt`. The equivalent `docker run` works the same way — mount your `config.yaml` at `/config.yaml`, or pass the same values as `-e` variables, and add `--network host` if you rely on UDP discovery.
 
-**Docker via `docker run` without config.yaml**
-
-Example `docker run` command with all environment variables:
-```
-docker run --name audioflow2mqtt \
--e MQTT_HOST=10.0.0.2 \
--e MQTT_PORT=1883 \
--e MQTT_USER=user \
--e MQTT_PASSWORD=password \
--e MQTT_QOS=1 \
--e BASE_TOPIC=audioflow2mqtt \
--e HOME_ASSISTANT=True \
--e DEVICES=10.0.1.100,10.0.1.101 \
--e LOG_LEVEL=debug \
---network host \ # only required if DEVICES variable is not set
-tediore/audioflow2mqtt:stable
-```
+The container exposes an HTTP health endpoint on `HEALTH_CHECK_PORT` (default `8080`) and defines a Docker `HEALTHCHECK` against it, so orchestrators can detect an unhealthy gateway.
 
 <br>
 
@@ -131,7 +98,7 @@ Running from source uses [uv](https://docs.astral.sh/uv/) for dependency managem
 4. `make install` — create the virtualenv and install the pinned dependencies
 5. `make run` — start the gateway
 
-Other targets: `make lint`, `make format`, `make test`, `make coverage`, and `make docker` (build the image locally). Run `make` on its own to list them.
+Other targets: `make lint`, `make format`, `make typecheck`, `make test`, `make coverage`, and `make docker` (build the image locally). Run `make` on its own to list them.
 
 To catch lint/format issues before committing, install the git hooks once with `make hooks` (runs `ruff` on commit via [pre-commit](https://pre-commit.com/)).
 
@@ -140,7 +107,7 @@ To catch lint/format issues before committing, install the git hooks once with `
 # Home Assistant
 audioflow2mqtt supports Home Assistant MQTT discovery which creates a Device for the Audioflow switch with the following:
 - Switch entities for each zone
-- Button entities to turn all zones on/off
+- Button entities to turn all zones on/off, plus a Reboot button
 - Sensors for SSID, RSSI (signal strength), and Wi-Fi channel
 
 ![Home Assistant Device screenshot](ha_screenshot.png)
@@ -150,7 +117,7 @@ audioflow2mqtt supports Home Assistant MQTT discovery which creates a Device for
 # MQTT topic structure and examples
 The command topic syntax is `BASE_TOPIC/serial_number/command/zone_number` where `BASE_TOPIC` is the base topic you define, `serial_number` is the device serial number (found on the sticker on the bottom of the device), `command` is one of the below commands, and `zone_number` is the zone you want to control (zone A on the switch is zone number 1, zone B is zone number 2, and so on).
 
-Valid commands are `set_zone_state` and `set_zone_enable`. The examples below assume the base topic is the default (`audioflow2mqtt`) and the serial number is `0123456789`.
+Valid commands are `set_zone_state`, `set_zone_enable`, and `reboot`. The examples below assume the base topic is the default (`audioflow2mqtt`) and the serial number is `0123456789`.
 
 **Turn zone B (zone number 2) on or off, or toggle between states**
 
@@ -170,6 +137,12 @@ _This might not really be something you would need, but I figured I'd add it any
 Topic: `audioflow2mqtt/0123456789/set_zone_enable/1`
 
 Valid payloads: `1` for enabled, `0` for disabled
+
+**Reboot the device**
+
+Topic: `audioflow2mqtt/0123456789/reboot`
+
+Valid payload: `reboot` (any message on this topic triggers a reboot)
 
 <br>
 
