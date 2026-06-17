@@ -1,6 +1,14 @@
 # Pinned Python base image
 FROM python:3.12-slim
 
+# Install tzdata so a TZ environment variable (e.g. TZ=America/Chicago) resolves
+# named time zones for log timestamps. The slim base image omits tzdata, which
+# would otherwise leave logs in UTC regardless of TZ. Early layer: rarely changes.
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
 # Pinned uv binary from the official image (build-time dependency manager only)
 COPY --from=ghcr.io/astral-sh/uv:0.11.21 /uv /bin/uv
 
