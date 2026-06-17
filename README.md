@@ -5,7 +5,7 @@ audioflow2mqtt enables local control of your Audioflow speaker switch(es) via MQ
 <br>
 
 # Configuration
-audioflow2mqtt is configured with a **config.yaml** file or with environment variables — the two are mutually exclusive. If a `config.yaml` is present in the working directory (mounted at `/config.yaml` in the container) it is used and environment variables are ignored; otherwise configuration comes entirely from the environment. Example config.yaml with all possible configuration options:
+audioflow2mqtt is configured with a **config.yaml** file or with environment variables. The two are mutually exclusive. If a `config.yaml` is present in the working directory (mounted at `/config.yaml` in the container) it is used and environment variables are ignored; otherwise configuration comes entirely from the environment. Example config.yaml with all possible configuration options:
 ```yaml
 mqtt:
   host: 10.0.0.2
@@ -82,7 +82,7 @@ services:
     network_mode: host # only required if DEVICES is not set
 ```
 
-Bring it up with `docker-compose up -d audioflow2mqtt`. The equivalent `docker run` works the same way — mount your `config.yaml` at `/config.yaml`, or pass the same values as `-e` variables, and add `--network host` if you rely on UDP discovery.
+Bring it up with `docker-compose up -d audioflow2mqtt`. The equivalent `docker run` works the same way: mount your `config.yaml` at `/config.yaml`, or pass the same values as `-e` variables, and add `--network host` if you rely on UDP discovery.
 
 The container exposes an HTTP health endpoint on `HEALTH_CHECK_PORT` (default `8080`) and defines a Docker `HEALTHCHECK` against it, so orchestrators can detect an unhealthy gateway.
 
@@ -95,8 +95,8 @@ Running from source uses [uv](https://docs.astral.sh/uv/) for dependency managem
 1. Set the necessary environment variables or create `config.yaml`
 2. `git clone https://github.com/henrycarteruk/audioflow2mqtt`
 3. `cd audioflow2mqtt`
-4. `make install` — create the virtualenv and install the pinned dependencies
-5. `make run` — start the gateway
+4. `make install`: create the virtualenv and install the pinned dependencies
+5. `make run`: start the gateway
 
 Other targets: `make lint`, `make format`, `make typecheck`, `make test`, `make coverage`, and `make docker` (build the image locally). Run `make` on its own to list them.
 
@@ -127,34 +127,34 @@ Publish to these topics to control a device. Per-zone commands take a trailing z
 | `audioflow2mqtt/0123456789/set_zone_state/<zone>` | `on`, `off`, `toggle` | Turn one zone on/off, or toggle it |
 | `audioflow2mqtt/0123456789/set_zone_state` | `on`, `off` | Turn **all** zones on/off (no zone number; `toggle` isn't supported here) |
 | `audioflow2mqtt/0123456789/set_zone_enable/<zone>` | `1`, `0` | Enable (`1`) or disable (`0`) one zone |
-| `audioflow2mqtt/0123456789/reboot` | _(ignored)_ | Reboot the device — any payload triggers it |
+| `audioflow2mqtt/0123456789/reboot` | _(ignored)_ | Reboot the device; any payload triggers it |
 
 ## Topics the gateway publishes
 
-**Zone state** — published after any change and on each poll:
+**Zone state**, published after any change and on each poll:
 
-- `audioflow2mqtt/0123456789/zone_state/<zone>` — `on` or `off`
-- `audioflow2mqtt/0123456789/zone_enabled/<zone>` — `1` or `0`
+- `audioflow2mqtt/0123456789/zone_state/<zone>`: `on` or `off`
+- `audioflow2mqtt/0123456789/zone_enabled/<zone>`: `1` or `0`
 
 > The device doesn't report a new state after a command, so the gateway re-reads the affected zone(s) and republishes.
 
-**Network info** — polled periodically:
+**Network info**, polled periodically:
 
 - `audioflow2mqtt/0123456789/network_info/ssid`
 - `audioflow2mqtt/0123456789/network_info/channel`
 - `audioflow2mqtt/0123456789/network_info/rssi`
 
-**Availability** — retained, for Home Assistant and monitoring:
+**Availability**, retained for Home Assistant and monitoring:
 
-- `audioflow2mqtt/status` — `online`/`offline` for the gateway itself; if the gateway disconnects unexpectedly, the broker publishes `offline` on its behalf
-- `audioflow2mqtt/0123456789/status` — `online`/`offline` for an individual device
+- `audioflow2mqtt/status`: `online`/`offline` for the gateway itself; if the gateway disconnects unexpectedly, the broker publishes `offline` on its behalf
+- `audioflow2mqtt/0123456789/status`: `online`/`offline` for an individual device
 
 <br>
 
 # Important notes
-A single instance handles multiple Audioflow devices — every topic is namespaced by the device serial number, so they don't collide. You only need a separate instance (with a **different base topic**) if you deliberately run more than one copy against the same broker.
+A single instance handles multiple Audioflow devices. Every topic is namespaced by the device serial number, so they don't collide. You only need a separate instance (with a **different base topic**) if you deliberately run more than one copy against the same broker.
 
-For reliability, give each Audioflow device a static IP — e.g. a DHCP reservation — and set `DEVICES`, rather than relying on UDP discovery. UDP discovery only works when the device is on the same subnet as the machine running audioflow2mqtt.
+For reliability, give each Audioflow device a static IP (e.g. a DHCP reservation) and set `DEVICES` rather than relying on UDP discovery. UDP discovery only works when the device is on the same subnet as the machine running audioflow2mqtt.
 
 <br>
 
