@@ -13,33 +13,28 @@ from audioflow2mqtt.parsing import parse_command_topic
 if TYPE_CHECKING:
     from audioflow2mqtt.config import Config
     from audioflow2mqtt.device import AudioflowDevice
+    from audioflow2mqtt.publisher import Publisher
 
 
 class Mqtt:
-    def __init__(self, config: Config, device: AudioflowDevice) -> None:
+    def __init__(self, config: Config, device: AudioflowDevice, publisher: Publisher) -> None:
         self.config = config
         self.device = device
-        self.client: aiomqtt.Client | None = None
+        self.publisher = publisher
         self.connected = False
         self.reconnect_attempts = 0
         self.reconnect_interval = 10
 
-    async def mqtt_connect(self, client: aiomqtt.Client) -> None:
-        try:
-            await client.publish(f"{self.config.base_topic}/status", "online", qos=1, retain=True)
-            logging.info("Connected to MQTT broker.")
-            self.connected = True
-            self.reconnect_attempts = 0
-        except aiomqtt.MqttError as e:
-            logging.error(f"Unable to connect to MQTT broker: {e}")
-            self.connected = False
+    async def mqtt_connect(self) -> None:
+        await self.publisher.publish_gateway_status(True)
+        logging.info("Connected to MQTT broker.")
+        self.connected = True
+        self.reconnect_attempts = 0
 
     async def mqtt_subscribe(self, client: aiomqtt.Client) -> None:
         try:
             for serial_no in self.device.serial_nos:
-                await client.publish(
-                    f"{self.config.base_topic}/{serial_no}/status", "online", qos=self.config.mqtt_qos, retain=True
-                )
+                await self.publisher.publish_device_status(serial_no, True)
                 await client.subscribe(f"{self.config.base_topic}/{serial_no}/#")
             logging.debug("Subscribed to MQTT topics.")
             self.connected = True
@@ -87,15 +82,15 @@ class Mqtt:
                 password=self.config.mqtt_password,
                 will=aiomqtt.Will(f"{self.config.base_topic}/status", "offline", 1, True),
             ) as client:
-                self.client = client
-                await self.mqtt_connect(client)
+                self.publisher.bind(client)
+                await self.mqtt_connect()
                 await self.mqtt_subscribe(client)
                 await self.start_mqtt_discovery(client)
                 await self.mqtt_listener(client)
         except aiomqtt.MqttError as e:
             logging.error(f"Unable to connect to MQTT broker: {e}")
         finally:
-            self.client = None
+            self.publisher.bind(None)
             self.connected = False
 
     async def mqtt_reconnect(self) -> None:
