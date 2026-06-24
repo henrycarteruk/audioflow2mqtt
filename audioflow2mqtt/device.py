@@ -15,19 +15,20 @@ if TYPE_CHECKING:
     import httpx
 
     from audioflow2mqtt.config import Config
-    from audioflow2mqtt.mqtt import Mqtt
+    from audioflow2mqtt.publisher import Publisher
 
 
 class AudioflowDevice:
-    # Wired by the caller after construction (see app.main): the Mqtt instance
-    # needs this device, so the two references are attached once both exist.
-    mqtt: Mqtt
+    # Wired by the caller after construction (see app.main).
+    publisher: Publisher
     http: httpx.AsyncClient
 
-    def __init__(self, config: Config, mqtt: Mqtt | None = None, http: httpx.AsyncClient | None = None) -> None:
+    def __init__(
+        self, config: Config, publisher: Publisher | None = None, http: httpx.AsyncClient | None = None
+    ) -> None:
         self.config = config
-        if mqtt is not None:
-            self.mqtt = mqtt
+        if publisher is not None:
+            self.publisher = publisher
         if http is not None:
             self.http = http
         self.timeout = 3
@@ -100,18 +101,7 @@ class AudioflowDevice:
                 return  # skip this cycle; the next poll will retry
             device_info = json.loads(device_info.text)
             network_info = parse_wifi_info(device_info["wifi"])
-
-            if self.mqtt.connected:
-                assert self.mqtt.client is not None
-                try:
-                    for x in network_info:
-                        await self.mqtt.client.publish(
-                            f"{self.config.base_topic}/{serial_no}/network_info/{x}",
-                            network_info[x],
-                            qos=self.config.mqtt_qos,
-                        )
-                except Exception as e:
-                    logging.error(f"Unable to publish network info: {e}")
+            await self.publisher.publish_network_info(serial_no, network_info)
 
     async def get_one_zone(self, serial_no: str, zone_no: str) -> None:
         """Get info about one zone and publish to MQTT"""
@@ -122,22 +112,9 @@ class AudioflowDevice:
         except Exception as e:
             logging.error(f"Unable to get zone info: {e}")
 
-        if self.mqtt.connected:
-            assert self.mqtt.client is not None
-            try:
-                zones = self.devices[serial_no]["zones"]["zones"]
-                await self.mqtt.client.publish(
-                    f"{self.config.base_topic}/{serial_no}/zone_state/{zone_no}",
-                    str(zones[int(zone_no) - 1]["state"]),
-                    qos=self.config.mqtt_qos,
-                )
-                await self.mqtt.client.publish(
-                    f"{self.config.base_topic}/{serial_no}/zone_enabled/{zone_no}",
-                    str(zones[int(zone_no) - 1]["enabled"]),
-                    qos=self.config.mqtt_qos,
-                )
-            except Exception as e:
-                logging.error(f"Unable to publish zone state: {e}")
+        zones = self.devices[serial_no]["zones"]["zones"]
+        zone = zones[int(zone_no) - 1]
+        await self.publisher.publish_zone(serial_no, zone_no, zone["state"], zone["enabled"])
 
     async def get_all_zones(self, serial_no: str) -> None:
         """Get info about all zones"""
@@ -152,24 +129,13 @@ class AudioflowDevice:
                 logging.info(f"Reconnected to Audioflow device at {ip}.")
             self.devices[serial_no]["retry_count"] = 0
             self.devices[serial_no]["last_poll_success"] = time.monotonic()
-            if self.mqtt.connected:
-                assert self.mqtt.client is not None
-                await self.mqtt.client.publish(
-                    f"{self.config.base_topic}/{serial_no}/status", "online", qos=self.config.mqtt_qos, retain=True
-                )
+            await self.publisher.publish_device_status(serial_no, True)
         except Exception as e:
             if retry_count < 3:
                 logging.error(f"Unable to communicate with Audioflow device at {ip}: {e}")
             self.devices[serial_no]["retry_count"] += 1
             if retry_count == 3:
-                if self.mqtt.connected:
-                    assert self.mqtt.client is not None
-                    await self.mqtt.client.publish(
-                        f"{self.config.base_topic}/{serial_no}/status",
-                        "offline",
-                        qos=self.config.mqtt_qos,
-                        retain=True,
-                    )
+                await self.publisher.publish_device_status(serial_no, False)
                 logging.warning(f"Audioflow device at {ip} unreachable; marking as offline.")
                 logging.warning(f"Trying to reconnect to {ip} every 10 sec in the background...")
 
@@ -177,22 +143,9 @@ class AudioflowDevice:
         """Publish info about all zones to MQTT"""
         zone_count = self.devices[serial_no]["zone_count"]
         zones = self.devices[serial_no]["zones"]["zones"]
-        if self.mqtt.connected:
-            assert self.mqtt.client is not None
-            try:
-                for x in range(1, zone_count + 1):
-                    await self.mqtt.client.publish(
-                        f"{self.config.base_topic}/{serial_no}/zone_state/{x}",
-                        str(zones[int(x) - 1]["state"]),
-                        qos=self.config.mqtt_qos,
-                    )
-                    await self.mqtt.client.publish(
-                        f"{self.config.base_topic}/{serial_no}/zone_enabled/{x}",
-                        str(zones[int(x) - 1]["enabled"]),
-                        qos=self.config.mqtt_qos,
-                    )
-            except Exception as e:
-                logging.error(f"Unable to publish all zone states: {e}")
+        for x in range(1, zone_count + 1):
+            zone = zones[int(x) - 1]
+            await self.publisher.publish_zone(serial_no, x, zone["state"], zone["enabled"])
 
     async def set_zone_state(self, serial_no: str, zone_no: str, zone_state: str) -> None:
         """Change state of one zone"""

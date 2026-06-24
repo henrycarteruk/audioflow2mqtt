@@ -6,6 +6,7 @@ from audioflow2mqtt.discovery import NetworkDiscovery
 from audioflow2mqtt.health import evaluate_health, health_check_server
 from audioflow2mqtt.mqtt import Mqtt
 from audioflow2mqtt.parsing import parse_command_topic, parse_wifi_info
+from audioflow2mqtt.publisher import Publisher
 
 __all__ = [
     "VERSION",
@@ -17,6 +18,7 @@ __all__ = [
     "evaluate_health",
     "health_check_server",
     "Mqtt",
+    "Publisher",
     "parse_command_topic",
     "parse_wifi_info",
 ]

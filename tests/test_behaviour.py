@@ -54,23 +54,31 @@ class FailingHttp:
         raise Exception("boom")
 
 
-class FakeMqttClient:
+class FakePublisher:
+    """Records intent calls instead of touching MQTT."""
+
     def __init__(self):
-        self.published = []
+        self.zones = []  # (serial, zone, state, enabled)
+        self.device_status = []  # (serial, online)
+        self.network_info = []  # (serial, info)
+        self.gateway_status = []  # online
 
-    async def publish(self, topic, payload=None, **kwargs):
-        self.published.append((topic, payload, kwargs))
+    async def publish_zone(self, serial, zone, state, enabled):
+        self.zones.append((serial, zone, state, enabled))
+
+    async def publish_device_status(self, serial, online):
+        self.device_status.append((serial, online))
+
+    async def publish_network_info(self, serial, info):
+        self.network_info.append((serial, info))
+
+    async def publish_gateway_status(self, online):
+        self.gateway_status.append(online)
 
 
-class FakeMqtt:
-    def __init__(self, connected=True):
-        self.connected = connected
-        self.client = FakeMqttClient()
-
-
-def make_device(responses=None, connected=True):
+def make_device(responses=None):
     device = AudioflowDevice(Config(), http=FakeHttp(responses))
-    device.mqtt = FakeMqtt(connected)
+    device.publisher = FakePublisher()
     return device
 
 
@@ -106,8 +114,7 @@ def test_set_zone_state_puts_and_republishes():
     asyncio.run(device.set_zone_state(SERIAL, "1", "on"))
 
     assert any(url.endswith("zones/1") and kw.get("content") == "1" for _, url, kw in device.http.puts)
-    topics = {t for t, _, _ in device.mqtt.client.published}
-    assert f"audioflow2mqtt/{SERIAL}/zone_state/1" in topics
+    assert any(z[:3] == (SERIAL, "1", "on") for z in device.publisher.zones)
 
 
 def test_set_zone_state_invalid_zone_no_put():
@@ -158,12 +165,11 @@ def test_set_all_zone_states_toggle_rejected():
 
 def test_get_all_zones_marks_offline_after_repeated_failure():
     device = AudioflowDevice(Config(), http=FailingHttp())
-    device.mqtt = FakeMqtt(connected=True)
+    device.publisher = FakePublisher()
     add_device(device)
     for _ in range(4):
         asyncio.run(device.get_all_zones(SERIAL))
-    offline = [p for p in device.mqtt.client.published if p[0].endswith(f"{SERIAL}/status") and p[1] == "offline"]
-    assert offline, "device should be marked offline after repeated failures"
+    assert (SERIAL, False) in device.publisher.device_status, "device should be marked offline after repeated failures"
 
 
 # --- reboot ----------------------------------------------------------------
@@ -217,7 +223,7 @@ class RecordingDevice:
 
 def test_mqtt_listener_routes_commands_and_ignores_others():
     device = RecordingDevice()
-    mqtt = Mqtt(Config(), device)
+    mqtt = Mqtt(Config(), device, FakePublisher())
     messages = [
         FakeMessage(f"audioflow2mqtt/{SERIAL}/set_zone_state/2", "on"),
         FakeMessage(f"audioflow2mqtt/{SERIAL}/set_zone_state", "off"),

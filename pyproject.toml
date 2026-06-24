@@ -50,6 +50,7 @@ module = [
     "audioflow2mqtt.health",
     "audioflow2mqtt.device",
     "audioflow2mqtt.mqtt",
+    "audioflow2mqtt.publisher",
 ]
 disallow_untyped_defs = true
 

@@ -12,6 +12,7 @@ from audioflow2mqtt.device import AudioflowDevice
 from audioflow2mqtt.discovery import NetworkDiscovery
 from audioflow2mqtt.health import health_check_server
 from audioflow2mqtt.mqtt import Mqtt
+from audioflow2mqtt.publisher import Publisher
 
 
 class HttpxGetFilter(logging.Filter):
@@ -51,9 +52,9 @@ async def main():
         logging.error("Exiting...")
         sys.exit(1)
 
-    device = AudioflowDevice(config)
-    mqtt = Mqtt(config, device)
-    device.mqtt = mqtt
+    publisher = Publisher(config)
+    device = AudioflowDevice(config, publisher=publisher)
+    mqtt = Mqtt(config, device, publisher)
     discovery = NetworkDiscovery(config.discovery_port)
 
     if config.device_ips is not None:
